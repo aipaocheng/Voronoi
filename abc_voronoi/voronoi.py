@@ -1,3 +1,6 @@
+# $LAN=PYTHON$
+# 國立中山大學 資工所甲組
+# M133040073 艾保丞
 import sys
 import numpy as np
 import math
