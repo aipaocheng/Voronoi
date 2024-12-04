@@ -287,19 +287,9 @@ class VoronoiCanvas(FigureCanvas):
             
             left_idx = len(left_convex) - 1  
             right_idx = 0  # 從右凸包的最左點開始
-            print(f"start from {left_convex[left_idx]}, {right_convex[right_idx]}")
                         
             while True:
                 updated = False
-                # 移動左凸包的索引
-                while True:
-                    result = orientation(right_convex[right_idx], left_convex[left_idx], left_convex[(left_idx-1) % len(left_convex)])
-                    if result == 1:  # 順時針
-                        left_idx = (left_idx + 1) % len(left_convex)
-                        updated = True
-                    else:
-                        break
-
                 # 移動右凸包的索引
                 while True:
                     result = orientation(left_convex[left_idx], right_convex[right_idx], right_convex[(right_idx+1) % len(right_convex)])
@@ -309,6 +299,15 @@ class VoronoiCanvas(FigureCanvas):
                     else:
                         break
                     
+                # 移動左凸包的索引
+                while True:
+                    result = orientation(right_convex[right_idx], left_convex[left_idx], left_convex[(left_idx-1) % len(left_convex)])
+                    if result == 1:  # 順時針
+                        left_idx = (left_idx + 1) % len(left_convex)
+                        updated = True
+                    else:
+                        break
+
                 if not updated:
                     break
                 
@@ -316,31 +315,25 @@ class VoronoiCanvas(FigureCanvas):
 
         def find_lower_tangent():
             """找到左凸包與右凸包的下切線"""
-            left_idx = len(left_convex) - 1  # 從左凸包的最右點開始
-            right_idx = 0  # 從右凸包的最左點開始
+            left_idx = 0
+            right_idx = len(right_convex) - 1
             
             while True:
                 updated = False
                 # 移動右凸包的索引
                 while True:
-                    result = orientation(left_convex[left_idx], right_convex[right_idx], right_convex[(right_idx+1) % len(right_convex)])
+                    result = orientation(left_convex[left_idx], right_convex[right_idx], right_convex[(right_idx-1) % len(right_convex)])
                     if result == 1:
-                        right_idx = (right_idx + 1) % len(right_convex)
-                        updated = True
-                    elif result == 0:
-                        right_idx = (right_idx + 1) % len(right_convex)
+                        right_idx = (right_idx - 1) % len(right_convex)
                         updated = True
                     else:
                         break
 
                 # 移動左凸包的索引
                 while True:
-                    result = orientation(right_convex[right_idx], left_convex[left_idx], left_convex[(left_idx - 1) % len(left_convex)])
+                    result = orientation(right_convex[right_idx], left_convex[left_idx], left_convex[(left_idx + 1) % len(left_convex)])
                     if result == -1:
-                        left_idx = (left_idx - 1) % len(left_convex)
-                        updated = True
-                    elif result == 0:
-                        left_idx = (left_idx - 1) % len(left_convex)
+                        left_idx = (left_idx + 1) % len(left_convex)
                         updated = True
                     else:
                         break
