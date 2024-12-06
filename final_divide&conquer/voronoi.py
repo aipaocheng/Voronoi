@@ -22,11 +22,28 @@ class VoronoiCanvas(FigureCanvas):
         super().__init__(fig)
         self.points = []
         self.edges = []
+        self.left_edges = []
+        self.right_edges = []
+        
+        self.left_voronoi = []
+        self.right_voronoi = []
+        
         self.left_hull = []
         self.right_hull = []
+        self.left_delete_hull = []
+        self.right_delete_hull = []
+        self.merge_hull = []
+        self.tangent = []
+        
         self.test_sets = []
         self.test_set_index = 0
         self.init_canvas()
+        
+        self.step = 0
+        self.SBS_count = -1
+        self.SBS_hp = []
+        self.SBS_output = []
+        self.SBS_tangent = []
 
         self.mpl_connect("button_press_event", self.on_click)
 
@@ -75,7 +92,7 @@ class VoronoiCanvas(FigureCanvas):
             self.ax.text(x + 5, y + 5, f"({x},{y})", fontsize=10, color='black')
         self.draw()
 
-    # 給予兩個點，劃出直線
+    # 劃出self.edges中的所有線段
     def plot_lines(self):
         for edge in self.edges:
             x_values = [edge[0], edge[2]]
@@ -83,36 +100,208 @@ class VoronoiCanvas(FigureCanvas):
             self.ax.plot(x_values, y_values, 'black')
         self.draw()
         
+    # 劃出self.left_hull中的所有線段
+    def plot_left_hull(self):
+        for i in range(len(self.left_hull)):
+            x1, y1 = self.left_hull[i]
+            x2, y2 = self.left_hull[(i + 1) % len(self.left_hull)]
+            self.ax.plot([x1, x2], [y1, y2], 'blue')
+        self.draw()
+        
+    # 劃出self.right_hull中的所有線段
+    def plot_right_hull(self):
+        for i in range(len(self.right_hull)):
+            x1, y1 = self.right_hull[i]
+            x2, y2 = self.right_hull[(i + 1) % len(self.right_hull)]
+            self.ax.plot([x1, x2], [y1, y2], 'blue')
+        self.draw()
+        
+    # 劃出self.left_delete_hull中的所有線段
+    def plot_output_left(self):
+        # print(f"left_delete_hull:{self.left_delete_hull}")
+        # print(len(self.left_delete_hull)-1)
+        for i in range(len(self.left_delete_hull)-1):
+            x1, y1 = self.left_delete_hull[i]
+            x2, y2 = self.left_delete_hull[(i + 1) % len(self.left_delete_hull)]
+            self.ax.plot([x1, x2], [y1, y2], 'blue')
+        self.draw()
+        
+    # 劃出self.right_delete_hull中的所有線段
+    def plot_output_right(self):
+        # print(f"right_delete_hull:{self.right_delete_hull}")
+        # print(len(self.right_delete_hull)-1)
+        for i in range(len(self.right_delete_hull)-1):
+            x1, y1 = self.right_delete_hull[i]
+            x2, y2 = self.right_delete_hull[(i + 1) % len(self.right_delete_hull)]
+            self.ax.plot([x1, x2], [y1, y2], 'blue')
+        self.draw()
+    
+    # 劃出self.tangent(上下切線)中的所有線段
+    def plot_tangent(self):
+        # print(self.tangent)
+        # tangent[0] tangent[1] upper
+        x1, y1 = self.tangent[0]
+        x2, y2 = self.tangent[1]
+        self.ax.plot([x1, x2], [y1, y2], 'purple')
+        # tangent[2] tangent[3] lower
+        x1, y1 = self.tangent[2]
+        x2, y2 = self.tangent[3]
+        self.ax.plot([x1, x2], [y1, y2], 'purple')
+        self.draw()
+    
+    def plot_left_voronoi(self):
+        print(f"left edges: {self.left_voronoi}")
+        for edge in self.left_voronoi:
+            x_values = [edge[0], edge[2]]
+            y_values = [edge[1], edge[3]]
+            self.ax.plot(x_values, y_values, 'green')
+        self.draw()
+        
+    def plot_right_voronoi(self):
+        print(f"right edges: {self.right_voronoi}")
+        for edge in self.right_voronoi:
+            x_values = [edge[0], edge[2]]
+            y_values = [edge[1], edge[3]]
+            self.ax.plot(x_values, y_values, 'orange')
+        self.draw()
+        
+    def plot_SBS(self, count):
+        self.init_canvas()
+        self.plot_points()
+        
+        output = self.SBS_hp[count]
+        # print(f"SBS_hp output:{output}")
+        for edge in output:
+            x_values = [edge[0], edge[2]]
+            y_values = [edge[1], edge[3]]
+            self.ax.plot(x_values, y_values, 'pink')
+            
+        output = self.SBS_output[count]
+        for edge in output:
+            x_values = [edge[0], edge[2]]
+            y_values = [edge[1], edge[3]]
+            self.ax.plot(x_values, y_values, 'blue')
+        
+        output = self.SBS_tangent[count]    
+        x_values = [output[0], output[2]]
+        y_values = [output[1], output[3]]
+        self.ax.plot(x_values, y_values, 'purple')
+        
+        # for edge in self.SBS_tangent[count]:
+        #     # print(f"edge:{edge}")
+        #     x_values = [edge[0], edge[2]]
+        #     y_values = [edge[1], edge[3]]
+        #     self.ax.plot(x_values, y_values, 'purple')
+        self.draw()
+        
+    def plot_SBS_finally(self, count):
+        print("Finally")
     ####################################################################################
 
     def run_voronoi(self):        
-        points_sort = np.array(self.points)
-        points_sort = points_sort[np.argsort(points_sort[:, 0])]  # 根據 x 座標排序
-        
+        # 將 self.points 根據 x 座標進行排序
+        points_sort = sorted(self.points, key=lambda point: point[0])
+
         # 呼叫分治法
         voronoi_edges = self.divide_and_conquer(points_sort)
-        # self.edges.extend(voronoi_edges)
+        self.edges.clear()
+        self.edges.extend(voronoi_edges)
+        self.init_canvas()
+        self.plot_points()
         self.plot_lines()
         self.draw()
-        # if len(self.points) < 2:
-        #     return
-        # elif len(self.points) == 2:
-        #     # print("Two points.")
-        #     self.plot_two_points()
-        # elif len(self.points) == 3:
-        #     # print("Three points.")
-        #     self.plot_three_points()
-        # else:
-        #     print("too many points")
-        #     return
 
+    def stepByStep(self):
+        # print("Step by step")
+        if self.step == 0:
+            print("Running Voronoi algorithm...")
+            self.run_voronoi()
+            self.init_canvas()
+            self.plot_points()
+            self.step += 1
+            self.step = self.step % 7
+        elif self.step == 1:
+            print("Step 1 : Displaying left convex hull...")
+            self.plot_left_hull()
+            self.step += 1
+            self.step = self.step % 7
+        elif self.step == 2:
+            print("Step 2 : Displaying right convex hull...")
+            self.plot_right_hull()
+            self.step += 1
+            self.step = self.step % 7
+        elif self.step == 3:
+            print("Step 3 : Displaying tangent...")
+            self.plot_tangent()
+            self.step += 1
+            self.step = self.step % 7
+        elif self.step == 4:
+            print("Step 4 : Displaying output left convex hull...")
+            self.init_canvas()
+            self.plot_points()
+            self.plot_tangent()
+            self.plot_output_left()
+            self.plot_right_hull()
+            self.step += 1
+            self.step = self.step % 7
+        elif self.step == 5:
+            print("Step 5 : Displaying output right convex hull...")
+            self.init_canvas()
+            self.plot_points()
+            self.plot_tangent()
+            self.plot_output_left()
+            self.plot_output_right()
+            self.step += 1
+            self.step = self.step % 7
+        elif self.step == 6:
+            print("Step 6 : Displaying hyperplane...")
+            print(self.SBS_count)
+            self.init_canvas()
+            self.plot_points()
+            if self.SBS_count == -1:
+                self.plot_tangent()
+                self.plot_left_voronoi()
+                self.plot_right_voronoi()
+            elif self.SBS_count < len(self.SBS_hp):
+                self.plot_SBS(self.SBS_count)
+            else:
+                self.plot_SBS_finally(self.SBS_count)
+                self.step += 1
+                self.step = self.step % 7
+            self.SBS_count += 1
+            self.draw()
+            
+            
+            
+    
     def clean(self):
         print("Cleaning canvas...")
+
         self.ax.clear()
         self.points.clear()
         self.edges.clear()
+        self.left_edges.clear()
+        self.right_edges.clear()
+        
+        self.left_voronoi.clear()
+        self.right_voronoi.clear()
+        
+        self.left_hull.clear()
+        self.right_hull.clear()
+        self.left_delete_hull.clear()
+        self.right_delete_hull.clear()
+        self.merge_hull.clear()
+        self.tangent.clear()
+        
         self.test_sets.clear()
         self.test_set_index = 0
+        
+        self.step = 0
+        self.SBS_hp.clear()
+        self.SBS_output.clear()
+        self.SBS_count = -1
+        self.SBS_tangent.clear()
+        
         self.init_canvas()
 
     def next_set(self):
@@ -162,7 +351,7 @@ class VoronoiCanvas(FigureCanvas):
         # 使用 x1 值對 self.edges 進行排序
         self.edges.sort(key=lambda edge: edge[0])
 
-        print(self.points)
+        # print(self.points)
         file_path, _ = QFileDialog.getSaveFileName(self, "Save File", "", "Text Files (*.txt);;CSV Files (*.csv)")
         if file_path:
             with open(file_path, 'w') as file:
@@ -179,61 +368,343 @@ class VoronoiCanvas(FigureCanvas):
     
     def divide_and_conquer(self, points_sort):
         if len(points_sort) == 1:
-            return ()
+            return ([])
         elif len(points_sort) == 2:
             edges = self.plot_two_points(points_sort)
-            if len(self.edges) == 2:
-                self.edges.extend(edges)
-                return ()
-            else:
-                return edges
+            return edges
         elif len(points_sort) == 3:
             edges = self.plot_three_points(points_sort)
-            if len(self.edges) == 3:
-                self.edges.extend(edges)
-                return ()
-            else:
-                return edges
+            return edges
 
         mid = len(points_sort) // 2 # 向下取整數
         left_points = points_sort[:mid]
         right_points = points_sort[mid:]
 
         left_edges = self.divide_and_conquer(left_points)
-        right_edges = self.divide_and_conquer(right_points)
-        
+        self.left_voronoi.clear()
         for edge in left_edges:
-            x_values = [edge[0], edge[2]]
-            y_values = [edge[1], edge[3]]
-            self.ax.plot(x_values, y_values, 'green')
+            self.left_voronoi.append(edge)
+        right_edges = self.divide_and_conquer(right_points)
+        self.right_voronoi.clear()
         for edge in right_edges:
-            x_values = [edge[0], edge[2]]
-            y_values = [edge[1], edge[3]]
-            self.ax.plot(x_values, y_values, 'orange')
-        self.draw()
-
-        self.merge_voronoi(left_points, right_points, left_edges, right_edges)
-        # return self.merge_voronoi(left_points, right_points, left_edges, right_edges)
+            self.right_voronoi.append(edge)
         
-    def merge_voronoi(self, left_points, right_points, left_edges, right_edges):
+        # if left_edges:
+        #     for edge in left_edges:
+        #         x_values = [edge[0], edge[2]]
+        #         y_values = [edge[1], edge[3]]
+        #         self.ax.plot(x_values, y_values, 'green')
+                
+        # if right_edges:
+        #     for edge in right_edges:
+        #         x_values = [edge[0], edge[2]]
+        #         y_values = [edge[1], edge[3]]
+        #         self.ax.plot(x_values, y_values, 'orange')
+        # self.draw()
+
+        self.merge_voronoi(left_points, right_points)
+        edges = self.hyperplane(left_edges, right_edges)
+        return edges
+        
+    def merge_voronoi(self, left_points, right_points):
         # convex_hull
         left_hull = self.convex_hull(left_points)
-        self.left_hull = left_hull
-        right_hull = self.convex_hull(right_points)
-        self.right_hull = right_hull
+        self.left_hull.clear()
+        for point in left_hull:
+            self.left_hull.append(point)
+        # self.plot_left_hull()
         
-        merge_hull = self.merge_convex_hull(left_hull, right_hull)
-        # 使用藍色畫出合併後的凸包
-        for i in range(len(merge_hull)):
-            x1, y1 = merge_hull[i]
-            x2, y2 = merge_hull[(i + 1) % len(merge_hull)]
-            self.ax.plot([x1, x2], [y1, y2], 'blue')
-        self.draw()
+        right_hull = self.convex_hull(right_points)
+        self.right_hull.clear()
+        for point in right_hull:
+            self.right_hull.append(point)
+        # self.plot_right_hull()
+        
+        merge_hull, left_delete_hull, right_delete_hull, upper_left, upper_right, lower_left, lower_right = self.merge_convex_hull(left_hull, right_hull)
+        
+        self.left_delete_hull.clear()
+        for point in left_delete_hull:
+            self.left_delete_hull.append(point)
+        self.right_delete_hull.clear()
+        for point in right_delete_hull:
+            self.right_delete_hull.append(point)
+        self.merge_hull.clear()
+        for point in merge_hull:
+            self.merge_hull.append(point)
+        self.tangent.clear()
+        self.tangent.append(upper_left)
+        self.tangent.append(upper_right)
+        self.tangent.append(lower_left)
+        self.tangent.append(lower_right)
+        
+        # self.init_canvas()
+        # self.plot_points()
+        
+        # self.plot_output_left()
+        # self.plot_output_right()
+        # self.plot_tangent()
+        
+        ################################################################################################
+        # 尋找HYPERPLANE
+        
+    def hyperplane(self, left_edges, right_edges):
+        self.SBS_hp.clear()
+        self.SBS_output.clear()
+        self.SBS_tangent.clear()
+        
+        hp_edges = []
+        hp_point1 = self.tangent[0]
+        # print(f"hp_point1:{hp_point1}")
+        hp_point2 = self.tangent[1]
+        # print(f"hp_point2:{hp_point2}")
+        # hp_point1 = upper_left[0], upper_left[1]
+        # hp_point2 = upper_right[0], upper_right[1]
+        a_hp, b_hp = self.perpendicular_line_params(self.tangent[0][0], self.tangent[0][1], self.tangent[1][0], self.tangent[1][1])
+        a_vp, b_vp = self.perpendicular_line_params(self.tangent[2][0], self.tangent[2][1], self.tangent[3][0], self.tangent[3][1])
+        
+        border_a, border_b = self.border_points(a_hp, b_hp)
+        if border_b[1] > border_a[1]:
+            border_a, border_b = border_b, border_a
+        if a_hp == None:
+            border_a = [(hp_point1[0]+hp_point2[0])/2, 10**15]
+        else:
+            y = 10**15
+            x = (y - b_hp) / a_hp
+            border_a = [x, y]
+        # print(f"border_a:{border_a}")
+        # print(f"border_b:{border_b}")
+        # print("--------------------")
+        
+        # 建立一個array，用來確認left與right的index是否有被使用過
+        left_index = [0] * len(left_edges)
+        right_index = [0] * len(right_edges)
+        # print(f"left_index length:{len(left_index)}")
+        # print(f"right_index length:{len(right_index)}")
+        
+        while True:
+            temp = []
+            temp.append(hp_point1[0])
+            temp.append(hp_point1[1])
+            temp.append(hp_point2[0])
+            temp.append(hp_point2[1])
+            self.SBS_tangent.append((temp))
+            intersection_left = []
+            intersection_right = []
+
+            # 尋找hp與所有left_edges的交點，並且存入intersection_left
+            for i in range(len(left_edges)):
+                if left_index[i] == 1:
+                    continue
+                edge = left_edges[i]
+                x1, y1, x2, y2 = edge[0], edge[1], edge[2], edge[3]
+                a, b = self.two_points_find_ab(x1, y1, x2, y2)
+                x, y = self.find_intersection(a_hp, b_hp, a, b)
+                if x != None and y != None:
+                    # 檢查此點是否在(x1, y1)與(x2, y2)之間
+                    if self.is_between(x1, x2, x) and self.is_between(y1, y2, y) and y <= border_a[1]:
+                        intersection_left.append((x, y, i))
+                    # self.intersection_left.append((x, y))
+            # print(f"intersection_left_length:{len(self.intersection_left)}")
+            
+            # 尋找hp與所有right_edges的交點，並且存入intersection_right
+            for i in range(len(right_edges)):
+                if right_index[i] == 1:
+                    continue
+                edge = right_edges[i]
+                x1, y1, x2, y2 = edge[0], edge[1], edge[2], edge[3]
+                a, b = self.two_points_find_ab(x1, y1, x2, y2)
+                x, y = self.find_intersection(a_hp, b_hp, a, b)
+                
+                if x != None and y != None:
+                    # 檢查此點是否在(x1, y1)與(x2, y2)之間
+                    if self.is_between(x1, x2, x) and self.is_between(y1, y2, y) and y <= border_a[1]:
+                        intersection_right.append((x, y, i))
+                    # self.intersection_right.append((x, y))
+            # print(f"intersection_right_length:{len(self.intersection_right)}")
+                    
+            # 遍尋intersection_left與intersection_right，尋找y最大的點
+            y_max = float('-inf')
+            index = -1
+            flag = 0
+            for i in range(len(intersection_left)):
+                if intersection_left[i][1] > y_max:
+                    index = i
+                    y_max = intersection_left[i][1]
+            for i in range(len(intersection_right)):
+                if intersection_right[i][1] > y_max:
+                    index = i
+                    y_max = intersection_right[i][1]
+                    flag = 1
+            
+            if index == -1:
+                break
+            
+            if flag == 0:
+                idx = intersection_left[index][2]
+                # 標示為已使用
+                left_index[idx] = 1
+                
+                # hp轉向點
+                border_b = [intersection_left[index][0], intersection_left[index][1]]
+                # print(f"border_b:{border_b}")
+                
+                # 將此段hp加入edges
+                hp_edges.append([border_a[0], border_a[1], border_b[0], border_b[1], hp_point1[0], hp_point1[1], hp_point2[0], hp_point2[1]])
+                self.SBS_hp.append(hp_edges) #TODO
+                # print(f"hp:{border_a[0], border_a[1], border_b[0], border_b[1]}")
+                
+                # 刪線
+                if left_edges[idx][0] < left_edges[idx][2]:
+                    left_edges[idx][2], left_edges[idx][3] = border_b[0], border_b[1]
+                else:
+                    left_edges[idx][0], left_edges[idx][1] = border_b[0], border_b[1]
+                                
+                # hp轉向
+                if hp_point1[0] == left_edges[idx][4] and hp_point1[1] == left_edges[idx][5]:
+                    hp_point1 = left_edges[idx][6], left_edges[idx][7]
+                elif hp_point1[0] == left_edges[idx][6] and hp_point1[1] == left_edges[idx][7]:
+                    hp_point1 = left_edges[idx][4], left_edges[idx][5]
+                elif hp_point2[0] == left_edges[idx][4] and hp_point2[1] == left_edges[idx][5]:
+                    hp_point2 = left_edges[idx][6], left_edges[idx][7]
+                elif hp_point2[0] == left_edges[idx][6] and hp_point2[1] == left_edges[idx][7]:
+                    hp_point2 = left_edges[idx][4], left_edges[idx][5]
+                # print(f"hp_point1:{hp_point1}")
+                # print(f"hp_point2:{hp_point2}")
+                a_hp, b_hp = self.perpendicular_line_params(hp_point1[0], hp_point1[1], hp_point2[0], hp_point2[1])
+
+            else:
+                idx = intersection_right[index][2]
+                right_index[idx] = 1
+                border_b = [intersection_right[index][0], intersection_right[index][1]]
+                hp_edges.append([border_a[0], border_a[1], border_b[0], border_b[1], hp_point1[0], hp_point1[1], hp_point2[0], hp_point2[1]])
+                self.SBS_hp.append(hp_edges) #TODO
+                
+                if right_edges[idx][0] < right_edges[idx][2]:
+                    right_edges[idx][0], right_edges[idx][1] = border_b[0], border_b[1]
+                else:
+                    right_edges[idx][2], right_edges[idx][3] = border_b[0], border_b[1]
+                                    
+                if hp_point1[0] == right_edges[idx][4] and hp_point1[1] == right_edges[idx][5]:
+                    hp_point1 = right_edges[idx][6], right_edges[idx][7]
+                elif hp_point1[0] == right_edges[idx][6] and hp_point1[1] == right_edges[idx][7]:
+                    hp_point1 = right_edges[idx][4], right_edges[idx][5]
+                elif hp_point2[0] == right_edges[idx][4] and hp_point2[1] == right_edges[idx][5]:
+                    hp_point2 = right_edges[idx][6], right_edges[idx][7]
+                elif hp_point2[0] == right_edges[idx][6] and hp_point2[1] == right_edges[idx][7]:
+                    hp_point2 = right_edges[idx][4], right_edges[idx][5]
+                a_hp, b_hp = self.perpendicular_line_params(hp_point1[0], hp_point1[1], hp_point2[0], hp_point2[1])
+                
+            border_a = border_b
+            
+            temp = []
+            for edge in left_edges:
+                temp.append(edge) #TODO
+            for edge in right_edges:
+                temp.append(edge) #TODO
+            self.SBS_output.append([temp]) #TODO
+        
+        # 劃出最後一段的hp
+        end1, end2 = self.border_points(a_vp, b_vp)
+        if end1[1] > end2[1]:
+            border_b = end2
+        else:
+            border_b = end1
+        hp_edges.append([border_a[0], border_a[1], border_b[0], border_b[1], self.tangent[2][0], self.tangent[2][1], self.tangent[3][0], self.tangent[3][1]])
+        self.SBS_hp.append(hp_edges) #TODO
+        
+        # for edge in edges:
+        #     print(int(edge[0]), int(edge[1]), int(edge[2]), int(edge[3]))
+        
+        output_left = []
+        output_right = []
+        # 檢查left_index，若為1則將其加入output_left
+        for i in range(len(left_index)):
+            if left_index[i] == 1:
+                output_left.append(left_edges[i])
+            else:
+                a, b = self.two_points_find_ab(left_edges[i][0], left_edges[i][1], left_edges[i][2], left_edges[i][3])
+                flag = 0
+                for j in range(len(hp_edges)):
+                    temp_a, temp_b = self.two_points_find_ab(hp_edges[j][0], hp_edges[j][1], hp_edges[j][2], hp_edges[j][3])
+                    temp_x, temp_y = self.find_intersection(a, b, temp_a, temp_b)
+                    if self.is_between(hp_edges[j][0], hp_edges[j][2], temp_x) and self.is_between(hp_edges[j][1], hp_edges[j][3], temp_y):
+                        flag = 1
+                        break
+                if flag == 0:
+                    output_left.append(left_edges[i])
+                else:
+                    if left_edges[i][0] < left_edges[i][2]:
+                        if self.is_between(left_edges[i][0], temp_x, left_edges[i][2]):
+                            output_left.append(left_edges[i])
+                    elif left_edges[i][0] > left_edges[i][2]:
+                        if self.is_between(left_edges[i][2], temp_x, left_edges[i][0]):
+                            output_left.append(left_edges[i])
+
+        # 檢查right_index，若為1則將其加入output_right
+        for i in range(len(right_index)):
+            if right_index[i] == 1:
+                output_right.append(right_edges[i])
+            else:
+                a, b = self.two_points_find_ab(right_edges[i][0], right_edges[i][1], right_edges[i][2], right_edges[i][3])
+                flag = 0
+                for j in range(len(hp_edges)):
+                    temp_a, temp_b = self.two_points_find_ab(hp_edges[j][0], hp_edges[j][1], hp_edges[j][2], hp_edges[j][3])
+                    temp_x, temp_y = self.find_intersection(a, b, temp_a, temp_b)
+                                            
+                    if temp_x != None and temp_y != None:
+                        if self.is_between(hp_edges[j][0], hp_edges[j][2], temp_x) and self.is_between(hp_edges[j][1], hp_edges[j][3], temp_y):
+                            flag = 1
+                            break
+                if flag == 0:
+                    output_right.append(right_edges[i])
+                else:
+                    if right_edges[i][0] < right_edges[i][2]:
+                        if self.is_between(right_edges[i][2], temp_x, right_edges[i][0]):
+                            output_right.append(right_edges[i])
+                    elif right_edges[i][0] > right_edges[i][2]:
+                        if self.is_between(right_edges[i][0], temp_x, right_edges[i][2]):
+                            output_right.append(right_edges[i])
+        temp = []
+        for edge in output_left:
+            temp.append(edge)
+        for edge in output_right:
+            temp.append(edge)
+        self.SBS_output.append(temp) #TODO
+                
+        
+        # 劃出edges中的所有線段
+        # for edge in edges:
+        #     x_values = [edge[0], edge[2]]
+        #     y_values = [edge[1], edge[3]]
+        #     self.ax.plot(x_values, y_values, 'pink')
+            
+        for edge in output_left:
+            hp_edges.append(edge)
+            # x_values = [edge[0], edge[2]]
+            # y_values = [edge[1], edge[3]]
+            # self.ax.plot(x_values, y_values, 'blue')
+            
+        for edge in output_right:
+            hp_edges.append(edge)
+            # x_values = [edge[0], edge[2]]
+            # y_values = [edge[1], edge[3]]
+            # self.ax.plot(x_values, y_values, 'purple')
+            
+        print(f"SBShp:{len(self.SBS_hp)}")    
+        print(f"SBSoutput:{len(self.SBS_output)}")
+        print(f"SBStangent:{len(self.SBS_tangent)}")
+        
+        # print(f"SBS_hp:{self.SBS_hp}")
+        # print(f"SBS_output:{self.SBS_output}")
+        # print(f"SBS_tangent:{self.SBS_tangent}")
+        
+        return hp_edges
     
     def convex_hull(self, points):
-        
-        if len(points) < 3:
-            if points[0][0] < points[1][0]:
+        if len(points) == 1:
+            return points
+        elif len(points) == 2:
+            if points[0][0] > points[1][0]:
                 points[0], points[1] = points[1], points[0]
             return points
         elif len(points) == 3:
@@ -255,13 +726,6 @@ class VoronoiCanvas(FigureCanvas):
             else:
                 if a1 > a2:
                     points[1], points[2] = points[2], points[1]
-            
-            for i in range(3):
-                x1, y1 = points[i]
-                x2, y2 = points[(i + 1) % 3]
-                # 使用藍色畫出convex hull的邊
-                self.ax.plot([x1, x2], [y1, y2], 'blue')
-            self.draw()
             return points  
         else:
             return points
@@ -284,70 +748,100 @@ class VoronoiCanvas(FigureCanvas):
 
         def find_upper_tangent():
             """找到左凸包與右凸包的上切線"""
-            
-            left_idx = len(left_convex) - 1  
-            right_idx = 0  # 從右凸包的最左點開始
-                        
+            # 找到左凸包x最大的點
+            left_idx = 0
+            for i in range(1, len(left_convex)):
+                if left_convex[i][0] > left_convex[left_idx][0]:
+                    left_idx = i
+                    
+            # 找到右凸包x最小的點
+            right_idx = 0
+            for i in range(1, len(right_convex)):
+                if right_convex[i][0] < right_convex[right_idx][0]:
+                    right_idx = i
             while True:
                 updated = False
-                # 移動右凸包的索引
-                while True:
-                    result = orientation(left_convex[left_idx], right_convex[right_idx], right_convex[(right_idx+1) % len(right_convex)])
+                # 固定左凸包的索引 遍尋右凸包的索引
+                for i in range(len(right_convex)):
+                    result = orientation(left_convex[left_idx], right_convex[right_idx], right_convex[i])
                     if result == -1:
-                        right_idx = (right_idx - 1) % len(right_convex)
+                        right_idx = i
                         updated = True
-                    else:
-                        break
-                    
-                # 移動左凸包的索引
-                while True:
-                    result = orientation(right_convex[right_idx], left_convex[left_idx], left_convex[(left_idx-1) % len(left_convex)])
-                    if result == 1:  # 順時針
-                        left_idx = (left_idx + 1) % len(left_convex)
+                    elif result == 0:
+                        if self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[right_idx][0], right_convex[right_idx][1]) < self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[i][0], right_convex[i][1]):
+                            right_idx = i
+                            updated = True
+                        
+                # 固定右凸包的索引 遍尋左凸包的索引
+                for i in range(len(left_convex)):
+                    result = orientation(right_convex[right_idx], left_convex[left_idx], left_convex[i])
+                    if result == 1:
+                        left_idx = i
                         updated = True
-                    else:
-                        break
-
+                    elif result == 0:
+                        if self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[left_idx][0], left_convex[left_idx][1]) < self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[i][0], left_convex[i][1]):
+                            left_idx = i
+                            updated = True
+                
                 if not updated:
                     break
-                
             return left_idx, right_idx
 
         def find_lower_tangent():
             """找到左凸包與右凸包的下切線"""
+            # 找到左凸包x最大的點
             left_idx = 0
-            right_idx = len(right_convex) - 1
+            for i in range(1, len(left_convex)):
+                if left_convex[i][0] > left_convex[left_idx][0]:
+                    left_idx = i
+                    
+            # 找到右凸包x最小的點
+            right_idx = 0
+            for i in range(1, len(right_convex)):
+                if right_convex[i][0] < right_convex[right_idx][0]:
+                    right_idx = i
             
             while True:
                 updated = False
-                # 移動右凸包的索引
-                while True:
-                    result = orientation(left_convex[left_idx], right_convex[right_idx], right_convex[(right_idx-1) % len(right_convex)])
+                # 固定左凸包的索引 遍尋右凸包的索引
+                for i in range(len(right_convex)):
+                    result = orientation(left_convex[left_idx], right_convex[right_idx], right_convex[i])
                     if result == 1:
-                        right_idx = (right_idx - 1) % len(right_convex)
+                        right_idx = i
                         updated = True
-                    else:
-                        break
-
-                # 移動左凸包的索引
-                while True:
-                    result = orientation(right_convex[right_idx], left_convex[left_idx], left_convex[(left_idx + 1) % len(left_convex)])
+                    elif result == 0:
+                        if self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[right_idx][0], right_convex[right_idx][1]) < self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[i][0], right_convex[i][1]):
+                            right_idx = i
+                            updated = True
+                        
+                # 固定右凸包的索引 遍尋左凸包的索引
+                for i in range(len(left_convex)):
+                    result = orientation(right_convex[right_idx], left_convex[left_idx], left_convex[i])
                     if result == -1:
-                        left_idx = (left_idx + 1) % len(left_convex)
+                        left_idx = i
                         updated = True
-                    else:
-                        break
-                    
+                    elif result == 0:
+                        if self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[left_idx][0], left_convex[left_idx][1]) < self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[i][0], left_convex[i][1]):
+                            left_idx = i
+                            updated = True
+                            
                 if not updated:
                     break
                 
             return left_idx, right_idx
         
+        # print("Left convex hull:")
+        # for point in left_convex:
+        #     print(point)
+        # print("Right convex hull:")
+        # for point in right_convex:
+        #     print(point)
+        
         # 找到上下切線
         upper_left, upper_right = find_upper_tangent()
         lower_left, lower_right = find_lower_tangent()
-        print(f"Upper tangent: {left_convex[upper_left]} - {right_convex[upper_right]}")
-        print(f"Lower tangent: {left_convex[lower_left]} - {right_convex[lower_right]}")
+        # print(f"Upper tangent: {left_convex[upper_left]} - {right_convex[upper_right]}")
+        # print(f"Lower tangent: {left_convex[lower_left]} - {right_convex[lower_right]}")
 
         # 合併凸包
         merged_hull = []
@@ -355,34 +849,34 @@ class VoronoiCanvas(FigureCanvas):
         output_right = []
         # 添加左凸包的有效點
         idx = upper_left
-        while idx != (lower_left + 1) % len(left_convex):
+        while True:
+            # print(f"Left convex: {left_convex[idx]}")
             output_left.append(left_convex[idx])
             merged_hull.append(left_convex[idx])
+
+            # 如果到達 lower_left，停止
+            if idx == lower_left:
+                break
+
+            # 順時針方向移動索引
             idx = (idx + 1) % len(left_convex)
 
         # 添加右凸包的有效點
         idx = lower_right
-        while idx != (upper_right + 1) % len(right_convex):
+        while True:
+            # print(f"Right convex: {right_convex[idx]}")
             output_right.append(right_convex[idx])
             merged_hull.append(right_convex[idx])
+
+            # 如果到達 upper_right，停止
+            if idx == upper_right:
+                break
+
+            # 順時針方向移動索引
             idx = (idx + 1) % len(right_convex)
 
-        return merged_hull
-    # def merge_convex_hull(self, left_hull, right_hull):
-    #     # 將點按照 x 座標排序
-    #     points_sort = sorted(points, key=lambda point: (point[0], point[1]))
-
-    #     # 初始化凸包
-    #     hull = []
-    #     # 進行兩次迴圈，以確保所有點都被處理
-    #     for i in range(2):
-    #         # 開始計算凸包
-    #         while len(hull) >= 2 and self.cross_product(hull[-2], hull[-1], points[0]) < 0:
-    #             hull.pop()
-    #         hull.append(points[0])
-    #         points_sort = points_sort[1:]
-
-    #     return hull
+        return merged_hull, output_left, output_right, left_convex[upper_left], right_convex[upper_right], left_convex[lower_left], right_convex[lower_right]
+    
     
     
     # 如果只有兩個點
@@ -417,7 +911,7 @@ class VoronoiCanvas(FigureCanvas):
                 y_values = [y_out1, y_out2]
 
         # 繪製法向量線
-        edges.append((x_values[0], y_values[0], x_values[1], y_values[1], x1, y1, x2, y2))
+        edges.append([x_values[0], y_values[0], x_values[1], y_values[1], x1, y1, x2, y2])
         # self.ax.plot(x_values, y_values, 'black')
         # self.plot_lines()
         # self.draw()
@@ -439,47 +933,47 @@ class VoronoiCanvas(FigureCanvas):
         if a12 == None and a23 == None: # 三點在同一條垂直線上
             # 由y的大小找出中間的點
             if (y1 > y2 and y1 < y3) or (y1 < y2 and y1 > y3): # y1為中間點
-                edges.append((0, mid_y12, 600, mid_y12, x1, y1, x2, y2))
-                edges.append((0, mid_y13, 600, mid_y13, x1, y1, x3, y3))
+                edges.append([0, mid_y12, 600, mid_y12, x1, y1, x2, y2])
+                edges.append([0, mid_y13, 600, mid_y13, x1, y1, x3, y3])
             elif (y2 > y1 and y2 < y3) or (y2 < y1 and y2 > y3): # y2為中間點
-                edges.append((0, mid_y12, 600, mid_y12, x1, y1, x2, y2))
-                edges.append((0, mid_y23, 600, mid_y23, x2, y2, x3, y3))
+                edges.append([0, mid_y12, 600, mid_y12, x1, y1, x2, y2])
+                edges.append([0, mid_y23, 600, mid_y23, x2, y2, x3, y3])
             elif (y3 > y1 and y3 < y2) or (y3 < y1 and y3 > y2): # y3為中間點
-                edges.append((0, mid_y13, 600, mid_y13, x1, y1, x3, y3))
-                edges.append((0, mid_y23, 600, mid_y23, x2, y2, x3, y3))
+                edges.append([0, mid_y13, 600, mid_y13, x1, y1, x3, y3])
+                edges.append([0, mid_y23, 600, mid_y23, x2, y2, x3, y3])
         elif y1 == y2 and y2 == y3: # 三點在同一條水平線上
             # 由x的大小找出中間的點
             if (x1 > x2 and x1 < x3) or (x1 < x2 and x1 > x3): # x1為中間點
-                edges.append((mid_x12, 0, mid_x12, 600, x1, y1, x2, y2))
-                edges.append((mid_x13, 0, mid_x13, 600, x1, y1, x3, y3))
+                edges.append([mid_x12, 0, mid_x12, 600, x1, y1, x2, y2])
+                edges.append([mid_x13, 0, mid_x13, 600, x1, y1, x3, y3])
             elif (x2 > x1 and x2 < x3) or (x2 < x1 and x2 > x3): # x2為中間點
-                edges.append((mid_x12, 0, mid_x12, 600, x1, y1, x2, y2))
-                edges.append((mid_x23, 0, mid_x23, 600, x2, y2, x3, y3))
+                edges.append([mid_x12, 0, mid_x12, 600, x1, y1, x2, y2])
+                edges.append([mid_x23, 0, mid_x23, 600, x2, y2, x3, y3])
             elif (x3 > x1 and x3 < x2) or (x3 < x1 and x3 > x2): # x3為中間點
-                edges.append((mid_x13, 0, mid_x13, 600, x1, y1, x3, y3))
-                edges.append((mid_x23, 0, mid_x23, 600, x2, y2, x3, y3))
+                edges.append([mid_x13, 0, mid_x13, 600, x1, y1, x3, y3])
+                edges.append([mid_x23, 0, mid_x23, 600, x2, y2, x3, y3])
         elif a12 == a23: # 三點共線但不為垂直線
             if (y1 > y2 and y1 < y3) or (y1 < y2 and y1 > y3): # y1為中間點
                 a, b = self.perpendicular_line_params(x1, y1, x2, y2)
                 temp = self.border_points(a, b)
-                edges.append((temp[0][0], temp[0][1], temp[1][0], temp[1][1], x1, y1, x2, y2))
+                edges.append([temp[0][0], temp[0][1], temp[1][0], temp[1][1], x1, y1, x2, y2])
                 a, b = self.perpendicular_line_params(x1, y1, x3, y3)
                 temp = self.border_points(a, b)
-                edges.append((temp[0][0], temp[0][1], temp[1][0], temp[1][1], x1, y1, x3, y3))
+                edges.append([temp[0][0], temp[0][1], temp[1][0], temp[1][1], x1, y1, x3, y3])
             elif (y2 > y1 and y2 < y3) or (y2 < y1 and y2 > y3): # y2為中間點
                 a, b = self.perpendicular_line_params(x1, y1, x2, y2)
                 temp = self.border_points(a, b)
-                edges.append((temp[0][0], temp[0][1], temp[1][0], temp[1][1], x1, y1, x2, y2))
+                edges.append([temp[0][0], temp[0][1], temp[1][0], temp[1][1], x1, y1, x2, y2])
                 a, b = self.perpendicular_line_params(x2, y2, x3, y3)
                 temp = self.border_points(a, b)
-                edges.append((temp[0][0], temp[0][1], temp[1][0], temp[1][1], x2, y2, x3, y3))
+                edges.append([temp[0][0], temp[0][1], temp[1][0], temp[1][1], x2, y2, x3, y3])
             elif (y3 > y1 and y3 < y2) or (y3 < y1 and y3 > y2): # y3為中間點
                 a, b = self.perpendicular_line_params(x1, y1, x3, y3)
                 temp = self.border_points(a, b)
-                edges.append((temp[0][0], temp[0][1], temp[1][0], temp[1][1], x1, y1, x3, y3))
+                edges.append([temp[0][0], temp[0][1], temp[1][0], temp[1][1], x1, y1, x3, y3])
                 a, b = self.perpendicular_line_params(x2, y2, x3, y3)
                 temp = self.border_points(a, b)
-                edges.append((temp[0][0], temp[0][1], temp[1][0], temp[1][1], x2, y2, x3, y3))
+                edges.append([temp[0][0], temp[0][1], temp[1][0], temp[1][1], x2, y2, x3, y3])
         else:
             triangle_type, angle = self.is_obtuse_triangle(x1, y1, x2, y2, x3, y3)
 
@@ -491,44 +985,44 @@ class VoronoiCanvas(FigureCanvas):
             x, y = self.find_intersection(pb_a12, pb_b12, pb_a23, pb_b23)
             # print(f"Outer center: ({x}, {y})")
             # 繪製外心
-            self.ax.plot(x, y, 'ro')
-            self.draw()
+            # self.ax.plot(x, y, 'ro')
+            # self.draw()
             
             if triangle_type == 2: # 銳角
                 temp = self.line_points(x, y, mid_x12, mid_y12, 0)
-                edges.append((x, y, temp[0], temp[1], x1, y1, x2, y2))
+                edges.append([x, y, temp[0], temp[1], x1, y1, x2, y2])
                 temp = self.line_points(x, y, mid_x23, mid_y23, 0)
-                edges.append((x, y, temp[0], temp[1], x2, y2, x3, y3))
+                edges.append([x, y, temp[0], temp[1], x2, y2, x3, y3])
                 temp = self.line_points(x, y, mid_x13, mid_y13, 0)
-                edges.append((x, y, temp[0], temp[1], x1, y1, x3, y3))
+                edges.append([x, y, temp[0], temp[1], x1, y1, x3, y3])
                 self.draw()
             else: # 鈍角 直角
                 if angle == 'A':
                     temp = self.line_points(x, y, mid_x12, mid_y12, 0)
-                    edges.append((x, y, temp[0], temp[1], x1, y1, x2, y2))
+                    edges.append([x, y, temp[0], temp[1], x1, y1, x2, y2])
                     temp = self.line_points(x, y, mid_x13, mid_y13, 0)
-                    edges.append((x, y, temp[0], temp[1], x1, y1, x3, y3))
+                    edges.append([x, y, temp[0], temp[1], x1, y1, x3, y3])
                 elif angle == 'B':
                     temp = self.line_points(x, y, mid_x12, mid_y12, 0)
-                    edges.append((x, y, temp[0], temp[1], x1, y1, x2, y2))
+                    edges.append([x, y, temp[0], temp[1], x1, y1, x2, y2])
                     temp = self.line_points(x, y, mid_x23, mid_y23, 0)
-                    edges.append((x, y, temp[0], temp[1], x2, y2, x3, y3))
+                    edges.append([x, y, temp[0], temp[1], x2, y2, x3, y3])
                 else:
                     temp = self.line_points(x, y, mid_x13, mid_y13, 0)
-                    edges.append((x, y, temp[0], temp[1], x1, y1, x3, y3))
+                    edges.append([x, y, temp[0], temp[1], x1, y1, x3, y3])
                     temp = self.line_points(x, y, mid_x23, mid_y23, 0)
-                    edges.append((x, y, temp[0], temp[1], x2, y2, x3, y3))
+                    edges.append([x, y, temp[0], temp[1], x2, y2, x3, y3])
                 
                 if triangle_type == 0: # 鈍角
                     if angle == 'A':
                         temp = self.line_points(x, y, mid_x23, mid_y23, 1)
-                        edges.append((x, y, temp[0], temp[1], x2, y2, x3, y3))
+                        edges.append([x, y, temp[0], temp[1], x2, y2, x3, y3])
                     elif angle == 'B':
                         temp = self.line_points(x, y, mid_x13, mid_y13, 1)
-                        edges.append((x, y, temp[0], temp[1], x1, y1, x3, y3))
+                        edges.append([x, y, temp[0], temp[1], x1, y1, x3, y3])
                     else:
                         temp = self.line_points(x, y, mid_x12, mid_y12, 1)
-                        edges.append((x, y, temp[0], temp[1], x1, y1, x2, y2))
+                        edges.append([x, y, temp[0], temp[1], x1, y1, x2, y2])
                 elif triangle_type == 1: # 直角
                     if angle == 'A':
                         temp_A, temp_B = self.border_points(pb_a23, pb_b23)
@@ -536,21 +1030,21 @@ class VoronoiCanvas(FigureCanvas):
                             temp = temp_A
                         else:
                             temp = temp_B
-                        edges.append((x, y, temp[0], temp[1], x2, y2, x3, y3))
+                        edges.append([x, y, temp[0], temp[1], x2, y2, x3, y3])
                     elif angle == 'B':
                         temp_A, temp_B = self.border_points(pb_a13, pb_b13)
                         if math.dist((x2, y2), temp_A) > math.dist((x2, y2), temp_B):
                             temp = temp_A
                         else:
                             temp = temp_B
-                        edges.append((x, y, temp[0], temp[1], x1, y1, x3, y3))
+                        edges.append([x, y, temp[0], temp[1], x1, y1, x3, y3])
                     else:
                         temp_A, temp_B = self.border_points(pb_a12, pb_b12)
                         if math.dist((x3, y3), temp_A) > math.dist((x3, y3), temp_B):
                             temp = temp_A
                         else:
                             temp = temp_B
-                        edges.append((x, y, temp[0], temp[1], x1, y1, x2, y2))
+                        edges.append([x, y, temp[0], temp[1], x1, y1, x2, y2])
         #         self.draw()
         # self.plot_lines()
         return edges
@@ -592,13 +1086,22 @@ class VoronoiCanvas(FigureCanvas):
             a = (y2 - y1) / (x2 - x1)
             b = y1 - a * x1
         return a, b
+    
+    # 給予兩個點，計算兩個點的距離
+    def two_points_distance(self, x1, y1, x2, y2):
+        return math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
         
     # 給予兩條直線的斜率和截距，計算交點
     def find_intersection(self, a1, b1, a2, b2):
         # 檢查斜率是否相同，若相同則兩條直線平行，沒有交點
+        # print(a1, b1, a2, b2)
+        
         if a1 == a2:
             print("The lines are parallel, no intersection.")
-            return None
+            return None, None
+        
+        if (a1 == None and b1 == None) or (a2 == None and b2 == None):
+            return None, None
         
         if a1 is None:
             # 若其中一條直線為垂直線，則交點的 x 座標為 b1
@@ -657,19 +1160,19 @@ class VoronoiCanvas(FigureCanvas):
             # (0, y)
             y_at_x_min = b
             if y_at_x_min >= 0 and y_at_x_min <= 600:
-                temp_point.append((0, y_at_x_min))
+                temp_point.append([0, y_at_x_min])
             # (600, y)
             y_at_x_max = a * 600 + b
             if y_at_x_max >= 0 and y_at_x_max <= 600:
-                temp_point.append((600, y_at_x_max))
+                temp_point.append([600, y_at_x_max])
             # (x, 0)
             x_at_y_min = (0 - b) / a
             if x_at_y_min >= 0 and x_at_y_min <= 600:
-                temp_point.append((x_at_y_min, 0))
+                temp_point.append([x_at_y_min, 0])
             # (x, 600)
             x_at_y_max = (600 - b) / a
             if x_at_y_max >= 0 and x_at_y_max <= 600:
-                temp_point.append((x_at_y_max, 600))
+                temp_point.append([x_at_y_max, 600])
             return temp_point[0], temp_point[1]
     
     # 計算中點
@@ -677,6 +1180,13 @@ class VoronoiCanvas(FigureCanvas):
         mid_x = (x1 + x2) / 2
         mid_y = (y1 + y2) / 2
         return mid_x, mid_y
+    
+    # 檢查 c 是否位於 a 和 b 之間（包括邊界）
+    def is_between(self, a, b, c):
+        try:
+            return min(a, b) <= c <= max(a, b)
+        except TypeError:
+            return False
     
     # 
     def line_points(self, x, y, mid_x, mid_y, order):
@@ -755,19 +1265,19 @@ class VoronoiCanvas(FigureCanvas):
                     # 若行是 "P x y"，則解析為座標
                     if line.startswith("P"):
                         x, y = map(float, line.split()[1:])
-                        self.points.append((int(x), int(y)))
-                        print(f"Added point: ({x}, {y})")
+                        self.points.append([int(x), int(y)])
+                        # print(f"Added point: ({x}, {y})")
                         
                     if line.startswith("E"):
                         x1, y1, x2, y2 = map(float, line.split()[1:])
-                        self.edges.append((int(x1), int(y1), int(x2), int(y2), 99999, 99999, 99999, 99999))
-                        print(f"Added edge: ({x1}, {y1}) to ({x2}, {y2})")
+                        self.edges.append([int(x1), int(y1), int(x2), int(y2), 99999, 99999, 99999, 99999])
+                        # print(f"Added edge: ({x1}, {y1}) to ({x2}, {y2})")
                         
                 # 顯示讀取的點
-                for point in self.points:
-                    print(f"Point: {point}")
-                for edge in self.edges:
-                    print(f"Edge: {edge}")
+                # for point in self.points:
+                #     print(f"Point: {point}")
+                # for edge in self.edges:
+                #     print(f"Edge: {edge}")
                 self.plot_points()
                 self.plot_lines()
                 QMessageBox.information(self, "Open File", "Output file loaded successfully.")
@@ -805,9 +1315,9 @@ class VoronoiCanvas(FigureCanvas):
                             self.test_sets.append(coords)
                         
                 # 顯示讀取的測試集
-                for i, test_set in enumerate(self.test_sets):
-                    print(f"Test set {i + 1} ({len(test_set)} points): {test_set}")
-                print("File processing completed.\n")
+                # for i, test_set in enumerate(self.test_sets):
+                #     print(f"Test set {i + 1} ({len(test_set)} points): {test_set}")
+                # print("File processing completed.\n")
                 QMessageBox.information(self, "Open File", "Read test sets successfully.\nPress 'NextSet' to display the first set.")
             
             
@@ -838,6 +1348,9 @@ class VoronoiApp(QMainWindow):
         btn_run = QPushButton("Run")
         btn_run.clicked.connect(self.canvas.run_voronoi)
         
+        btn_stepByStep = QPushButton("StepByStep")
+        btn_stepByStep.clicked.connect(self.canvas.stepByStep)
+        
         btn_clean = QPushButton("Clean")
         btn_clean.clicked.connect(self.canvas.clean)
         
@@ -851,12 +1364,13 @@ class VoronoiApp(QMainWindow):
         btn_save_file.clicked.connect(self.canvas.save_file)
 
         # Set the width to half and height to double
-        for btn in [btn_run, btn_clean, btn_next_set, btn_open_file, btn_save_file]:
+        for btn in [btn_run, btn_stepByStep, btn_clean, btn_next_set, btn_open_file, btn_save_file]:
             btn.setFixedWidth(150)  # Half the usual width (default might be around 200)
             btn.setFixedHeight(60)  # Double the usual height (default might be around 30)
 
         # Add buttons to the layout
         button_layout.addWidget(btn_run)
+        button_layout.addWidget(btn_stepByStep)
         button_layout.addWidget(btn_clean)
         button_layout.addWidget(btn_next_set)
         button_layout.addWidget(btn_open_file)
@@ -881,8 +1395,6 @@ class VoronoiApp(QMainWindow):
 
         # Set the central widget of the main window
         self.setCentralWidget(central_widget)
-
-    
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
