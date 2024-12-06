@@ -169,18 +169,25 @@ class VoronoiCanvas(FigureCanvas):
         self.init_canvas()
         self.plot_points()
         
-        output = self.SBS_hp[count]
+        self.plot_left_voronoi()
+        self.plot_right_voronoi()
+        # output = self.SBS_hp[count]
         # print(f"SBS_hp output:{output}")
-        for edge in output:
-            x_values = [edge[0], edge[2]]
-            y_values = [edge[1], edge[3]]
+        # for edge in output:
+        #     x_values = [edge[0], edge[2]]
+        #     y_values = [edge[1], edge[3]]
+        #     self.ax.plot(x_values, y_values, 'pink')
+        for i in range(count+1):
+            output = self.SBS_hp[i]
+            x_values = [output[0], output[2]]
+            y_values = [output[1], output[3]]
             self.ax.plot(x_values, y_values, 'pink')
             
-        output = self.SBS_output[count]
-        for edge in output:
-            x_values = [edge[0], edge[2]]
-            y_values = [edge[1], edge[3]]
-            self.ax.plot(x_values, y_values, 'blue')
+        # output = self.SBS_output[count]
+        # for edge in output:
+        #     x_values = [edge[0], edge[2]]
+        #     y_values = [edge[1], edge[3]]
+        #     self.ax.plot(x_values, y_values, 'blue')
         
         output = self.SBS_tangent[count]    
         x_values = [output[0], output[2]]
@@ -194,7 +201,10 @@ class VoronoiCanvas(FigureCanvas):
         #     self.ax.plot(x_values, y_values, 'purple')
         self.draw()
         
-    def plot_SBS_finally(self, count):
+    def plot_SBS_finally(self):
+        self.init_canvas()
+        self.plot_points()
+        self.plot_lines()
         print("Finally")
     ####################################################################################
 
@@ -265,7 +275,7 @@ class VoronoiCanvas(FigureCanvas):
             elif self.SBS_count < len(self.SBS_hp):
                 self.plot_SBS(self.SBS_count)
             else:
-                self.plot_SBS_finally(self.SBS_count)
+                self.plot_SBS_finally()
                 self.step += 1
                 self.step = self.step % 7
             self.SBS_count += 1
@@ -308,8 +318,27 @@ class VoronoiCanvas(FigureCanvas):
         if self.test_sets:
             if self.test_set_index < len(self.test_sets):
                 print(f"Displaying test set {self.test_set_index + 1}.")
+                self.ax.clear()
                 self.points.clear()
                 self.edges.clear()
+                self.left_edges.clear()
+                self.right_edges.clear()
+                
+                self.left_voronoi.clear()
+                self.right_voronoi.clear()
+                
+                self.left_hull.clear()
+                self.right_hull.clear()
+                self.left_delete_hull.clear()
+                self.right_delete_hull.clear()
+                self.merge_hull.clear()
+                self.tangent.clear()
+                
+                self.step = 0
+                self.SBS_count = -1
+                self.SBS_hp = []
+                self.SBS_output = []
+                self.SBS_tangent = []
                 for point in self.test_sets[self.test_set_index]:
                     self.add_point(round(point[0]), round(point[1]))
                 self.test_set_index += 1
@@ -325,12 +354,13 @@ class VoronoiCanvas(FigureCanvas):
         file_path, _ = QFileDialog.getOpenFileName(self, "Open File", "", "Text Files (*.txt);;All Files (*)")
         if file_path:
             try:
-                self.ax.clear()
-                self.init_canvas()
-                self.test_sets.clear()
-                self.test_set_index = 0
-                self.points.clear()
-                self.edges.clear()
+                # self.ax.clear()
+                # self.init_canvas()
+                # self.test_sets.clear()
+                # self.test_set_index = 0
+                # self.points.clear()
+                # self.edges.clear()
+                self.clean()
                 self.file_processing(file_path)
             except Exception as e:
                 print(f"Error loading file: {e}")
@@ -384,6 +414,7 @@ class VoronoiCanvas(FigureCanvas):
         self.left_voronoi.clear()
         for edge in left_edges:
             self.left_voronoi.append(edge)
+            
         right_edges = self.divide_and_conquer(right_points)
         self.right_voronoi.clear()
         for edge in right_edges:
@@ -467,6 +498,8 @@ class VoronoiCanvas(FigureCanvas):
             border_a, border_b = border_b, border_a
         if a_hp == None:
             border_a = [(hp_point1[0]+hp_point2[0])/2, 10**15]
+        elif a_hp == 0:
+            border_a = [0, hp_point1[1]]
         else:
             y = 10**15
             x = (y - b_hp) / a_hp
@@ -550,7 +583,7 @@ class VoronoiCanvas(FigureCanvas):
                 
                 # 將此段hp加入edges
                 hp_edges.append([border_a[0], border_a[1], border_b[0], border_b[1], hp_point1[0], hp_point1[1], hp_point2[0], hp_point2[1]])
-                self.SBS_hp.append(hp_edges) #TODO
+                # self.SBS_hp.append(hp_edges) #TODO
                 # print(f"hp:{border_a[0], border_a[1], border_b[0], border_b[1]}")
                 
                 # 刪線
@@ -577,7 +610,7 @@ class VoronoiCanvas(FigureCanvas):
                 right_index[idx] = 1
                 border_b = [intersection_right[index][0], intersection_right[index][1]]
                 hp_edges.append([border_a[0], border_a[1], border_b[0], border_b[1], hp_point1[0], hp_point1[1], hp_point2[0], hp_point2[1]])
-                self.SBS_hp.append(hp_edges) #TODO
+                # self.SBS_hp.append(hp_edges) #TODO
                 
                 if right_edges[idx][0] < right_edges[idx][2]:
                     right_edges[idx][0], right_edges[idx][1] = border_b[0], border_b[1]
@@ -610,10 +643,13 @@ class VoronoiCanvas(FigureCanvas):
         else:
             border_b = end1
         hp_edges.append([border_a[0], border_a[1], border_b[0], border_b[1], self.tangent[2][0], self.tangent[2][1], self.tangent[3][0], self.tangent[3][1]])
-        self.SBS_hp.append(hp_edges) #TODO
+        # self.SBS_hp.append(hp_edges) #TODO
         
         # for edge in edges:
         #     print(int(edge[0]), int(edge[1]), int(edge[2]), int(edge[3]))
+        
+        for edge in hp_edges:
+            self.SBS_hp.append(edge)
         
         output_left = []
         output_right = []
@@ -768,7 +804,7 @@ class VoronoiCanvas(FigureCanvas):
                         right_idx = i
                         updated = True
                     elif result == 0:
-                        if self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[right_idx][0], right_convex[right_idx][1]) < self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[i][0], right_convex[i][1]):
+                        if self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[right_idx][0], right_convex[right_idx][1]) > self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[i][0], right_convex[i][1]):
                             right_idx = i
                             updated = True
                         
@@ -779,7 +815,7 @@ class VoronoiCanvas(FigureCanvas):
                         left_idx = i
                         updated = True
                     elif result == 0:
-                        if self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[left_idx][0], left_convex[left_idx][1]) < self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[i][0], left_convex[i][1]):
+                        if self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[left_idx][0], left_convex[left_idx][1]) > self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[i][0], left_convex[i][1]):
                             left_idx = i
                             updated = True
                 
@@ -810,7 +846,7 @@ class VoronoiCanvas(FigureCanvas):
                         right_idx = i
                         updated = True
                     elif result == 0:
-                        if self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[right_idx][0], right_convex[right_idx][1]) < self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[i][0], right_convex[i][1]):
+                        if self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[right_idx][0], right_convex[right_idx][1]) > self.two_points_distance(left_convex[left_idx][0], left_convex[left_idx][1], right_convex[i][0], right_convex[i][1]):
                             right_idx = i
                             updated = True
                         
@@ -821,7 +857,7 @@ class VoronoiCanvas(FigureCanvas):
                         left_idx = i
                         updated = True
                     elif result == 0:
-                        if self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[left_idx][0], left_convex[left_idx][1]) < self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[i][0], left_convex[i][1]):
+                        if self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[left_idx][0], left_convex[left_idx][1]) > self.two_points_distance(right_convex[right_idx][0], right_convex[right_idx][1], left_convex[i][0], left_convex[i][1]):
                             left_idx = i
                             updated = True
                             
@@ -848,7 +884,7 @@ class VoronoiCanvas(FigureCanvas):
         output_left = []
         output_right = []
         # 添加左凸包的有效點
-        idx = upper_left
+        idx = upper_left 
         while True:
             # print(f"Left convex: {left_convex[idx]}")
             output_left.append(left_convex[idx])
